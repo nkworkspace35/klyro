@@ -1,7 +1,7 @@
 function Hero() {
   return (
     <section
-      id="ask"
+      id="home"
       className="relative overflow-hidden px-4 py-20 sm:px-6 sm:py-24 lg:px-8 lg:py-32"
     >
       {/* Background glow */}
@@ -33,7 +33,10 @@ function Hero() {
         </p>
 
         {/* Problem Input */}
-        <div className="mx-auto mt-10 max-w-3xl">
+        <div
+          id="ask"
+          className="mx-auto mt-10 max-w-3xl"
+        >
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-3 shadow-2xl shadow-black/20 backdrop-blur-xl">
 
             <textarea
@@ -62,23 +65,32 @@ function Hero() {
 
           {/* Suggestions */}
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-             <span className="text-xs leading-none text-slate-600">
-                  Try:
-             </span>
+            <span className="text-xs leading-none text-slate-600">
+              Try:
+            </span>
 
-            <button className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-400 transition hover:border-violet-400/30 hover:text-slate-200">
+            <button
+              type="button"
+              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-400 transition hover:border-violet-400/30 hover:text-slate-200"
+            >
               Career decision
             </button>
 
-            <button className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-400 transition hover:border-violet-400/30 hover:text-slate-200">
+            <button
+              type="button"
+              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-400 transition hover:border-violet-400/30 hover:text-slate-200"
+            >
               Study plan
             </button>
 
-            <button className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-400 transition hover:border-violet-400/30 hover:text-slate-200">
+            <button
+              type="button"
+              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-400 transition hover:border-violet-400/30 hover:text-slate-200"
+            >
               Work problem
             </button>
-
           </div>
+
         </div>
 
       </div>

@@ -3,6 +3,7 @@ import Hero from "./components/Hero"
 import HowItWorks from "./components/HowItWorks"
 import Features from "./components/Features"
 import FinalCTA from "./components/FinalCTA"
+import Footer from "./components/Footer"
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
         <HowItWorks />
         <Features />
         <FinalCTA />
+        <Footer />
       </main>
     </div>
   )
