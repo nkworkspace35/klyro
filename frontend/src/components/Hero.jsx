@@ -1,4 +1,12 @@
+import { useNavigate } from "react-router-dom"
+
 function Hero() {
+  const navigate = useNavigate()
+
+  const handleAskKlyro = () => {
+    navigate("/login")
+  }
+
   return (
     <section
       id="home"
@@ -54,6 +62,7 @@ function Hero() {
 
               <button
                 type="button"
+                onClick={handleAskKlyro}
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-violet-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-400"
               >
                 Ask KLYRO
