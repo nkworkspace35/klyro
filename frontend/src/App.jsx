@@ -1,6 +1,8 @@
 import Navbar from "./components/Navbar"
 import Hero from "./components/Hero"
 import HowItWorks from "./components/HowItWorks"
+import Features from "./components/Features"
+import FinalCTA from "./components/FinalCTA"
 
 function App() {
   return (
@@ -10,6 +12,8 @@ function App() {
       <main>
         <Hero />
         <HowItWorks />
+        <Features />
+        <FinalCTA />
       </main>
     </div>
   )
