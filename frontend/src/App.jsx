@@ -1,9 +1,16 @@
+import Navbar from "./components/Navbar"
+import Hero from "./components/Hero"
+import HowItWorks from "./components/HowItWorks"
+
 function App() {
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-      <h1 className="text-5xl font-bold text-white">
-        KLYRO ✦
-      </h1>
+    <div className="min-h-screen bg-[#08090D] text-white">
+      <Navbar />
+
+      <main>
+        <Hero />
+        <HowItWorks />
+      </main>
     </div>
   )
 }
