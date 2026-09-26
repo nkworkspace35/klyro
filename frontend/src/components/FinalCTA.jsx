@@ -1,8 +1,7 @@
 function FinalCTA() {
   return (
     <section
-      id="about"
-      className="relative overflow-hidden px-4 py-24 sm:px-6 lg:px-8 lg:py-32"
+      className="relative overflow-hidden px-4 py-16 sm:px-6 lg:px-8 lg:py-20"
     >
       {/* Background glow */}
       <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-500/10 blur-3xl" />

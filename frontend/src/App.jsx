@@ -15,8 +15,9 @@ function App() {
         <HowItWorks />
         <Features />
         <FinalCTA />
-        <Footer />
       </main>
+
+      <Footer />
     </div>
   )
 }

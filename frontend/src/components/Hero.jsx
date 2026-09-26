@@ -2,7 +2,7 @@ function Hero() {
   return (
     <section
       id="home"
-      className="relative overflow-hidden px-4 py-20 sm:px-6 sm:py-24 lg:px-8 lg:py-32"
+      className="relative overflow-hidden px-4 pt-20 pb-12 sm:px-6 sm:pt-24 sm:pb-16 lg:px-8 lg:pt-28 lg:pb-20"
     >
       {/* Background glow */}
       <div className="pointer-events-none absolute left-1/2 top-20 -z-10 h-72 w-72 -translate-x-1/2 rounded-full bg-violet-500/10 blur-3xl sm:h-96 sm:w-96" />

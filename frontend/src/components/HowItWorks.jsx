@@ -23,7 +23,7 @@ function HowItWorks() {
   return (
     <section
       id="how-it-works"
-      className="relative px-4 py-24 sm:px-6 lg:px-8 lg:py-32"
+      className="relative px-4 py-16 sm:px-6 lg:px-8 lg:py-20"
     >
       <div className="mx-auto max-w-7xl">
 
@@ -44,7 +44,7 @@ function HowItWorks() {
         </div>
 
         {/* Steps */}
-        <div className="mt-16 grid gap-6 md:grid-cols-3">
+        <div className="mt-12 grid gap-6 md:grid-cols-3">
           {steps.map((step) => (
             <div
               key={step.number}

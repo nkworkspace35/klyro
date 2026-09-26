@@ -41,7 +41,7 @@ function Features() {
   return (
     <section
       id="features"
-      className="relative px-4 py-24 sm:px-6 lg:px-8 lg:py-32"
+      className="relative px-4 py-16 sm:px-6 lg:px-8 lg:py-20"
     >
       <div className="mx-auto max-w-7xl">
 
@@ -62,7 +62,7 @@ function Features() {
         </div>
 
         {/* Feature cards */}
-        <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
             <article
               key={feature.title}

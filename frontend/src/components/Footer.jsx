@@ -1,10 +1,10 @@
 function Footer() {
   return (
-    <footer className="border-t border-white/10 px-4 py-10 sm:px-6 lg:px-8">
+    <footer className="border-t border-white/10 px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
 
-        {/* Main footer */}
-        <div className="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+        {/* Main Footer */}
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
 
           {/* Brand */}
           <div>
@@ -53,7 +53,7 @@ function Footer() {
         </div>
 
         {/* Bottom */}
-        <div className="mt-8 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-6 flex flex-col gap-3 border-t border-white/10 pt-5 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
           <p>
             © {new Date().getFullYear()} KLYRO. All rights reserved.
           </p>
