@@ -1,25 +1,77 @@
 const express = require("express")
 
-const authenticateToken = require("../middleware/authMiddleware")
 const {
   createProblem,
   getUserProblems,
+  getProblemById,
+  updateProblem,
+  updateProblemStatus,
+  deleteProblem,
+  saveAIResponse,
+  updateProblemAction,
 } = require("../controllers/problemController")
 
-const router = express.Router()
+const authenticateToken =
+  require("../middleware/authMiddleware")
 
-// POST /api/problems
+const router =
+  express.Router()
+
+
 router.post(
   "/",
   authenticateToken,
   createProblem
 )
 
-// GET /api/problems
+
 router.get(
   "/",
   authenticateToken,
   getUserProblems
 )
+
+
+router.get(
+  "/:id",
+  authenticateToken,
+  getProblemById
+)
+
+
+router.patch(
+  "/:id",
+  authenticateToken,
+  updateProblem
+)
+
+
+router.patch(
+  "/:id/status",
+  authenticateToken,
+  updateProblemStatus
+)
+
+
+router.delete(
+  "/:id",
+  authenticateToken,
+  deleteProblem
+)
+
+
+router.patch(
+  "/:id/ai",
+  authenticateToken,
+  saveAIResponse
+)
+
+
+router.patch(
+  "/:id/actions/:actionId",
+  authenticateToken,
+  updateProblemAction
+)
+
 
 module.exports = router
