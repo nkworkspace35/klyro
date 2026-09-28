@@ -1,78 +1,210 @@
-import { useEffect, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import {
+  useEffect,
+  useState,
+} from "react"
+import {
+  useNavigate,
+  Link,
+} from "react-router-dom"
 
-function Login() {
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000"
+
+export default function Login({
+  open: controlledOpen,
+  onClose,
+  onSwitchToSignup,
+}) {
   const navigate = useNavigate()
 
-  const [formData, setFormData] =
-    useState({
-      email: "",
-      password: "",
-    })
+  const [
+    internalOpen,
+    setInternalOpen,
+  ] = useState(true)
 
-  const [loading, setLoading] =
-    useState(false)
+  const isControlled =
+    typeof controlledOpen ===
+    "boolean"
 
-  const [error, setError] =
-    useState("")
+  const open = isControlled
+    ? controlledOpen
+    : internalOpen
 
-  const [message, setMessage] =
-    useState("")
+  const [
+    email,
+    setEmail,
+  ] = useState("")
+
+  const [
+    password,
+    setPassword,
+  ] = useState("")
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(false)
+
+  const [
+    error,
+    setError,
+  ] = useState("")
+
+  /*
+  ========================================================
+  OPEN/CLOSE EVENTS
+  ========================================================
+  */
 
   useEffect(() => {
-    const token =
-      localStorage.getItem(
-        "klyro_token"
+    function handleOpen() {
+      if (!isControlled) {
+        setInternalOpen(true)
+      }
+    }
+
+    function handleClose() {
+      if (!isControlled) {
+        setInternalOpen(false)
+      }
+
+      onClose?.()
+    }
+
+    window.addEventListener(
+      "klyro-open-login",
+      handleOpen
+    )
+
+    window.addEventListener(
+      "klyro-close-auth",
+      handleClose
+    )
+
+    return () => {
+      window.removeEventListener(
+        "klyro-open-login",
+        handleOpen
       )
 
-    if (token) {
-      navigate("/", {
-        replace: true,
-      })
+      window.removeEventListener(
+        "klyro-close-auth",
+        handleClose
+      )
     }
-  }, [navigate])
+  }, [isControlled, onClose])
+
+  /*
+  ========================================================
+  ESC
+  ========================================================
+  */
 
   useEffect(() => {
-    const pendingProblem =
-      localStorage.getItem(
-        "klyro_pending_problem"
-      )
+    if (!open) {
+      return
+    }
 
-    if (pendingProblem) {
-      setMessage(
-        "Your problem is waiting for you after login."
+    function handleEscape(event) {
+      if (
+        event.key === "Escape"
+      ) {
+        closePanel()
+      }
+    }
+
+    document.addEventListener(
+      "keydown",
+      handleEscape
+    )
+
+    return () => {
+      document.removeEventListener(
+        "keydown",
+        handleEscape
       )
     }
-  }, [])
+  }, [open])
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]:
-        e.target.value,
-    })
+  /*
+  ========================================================
+  CLOSE
+  ========================================================
+  */
+
+  function closePanel() {
+    if (!isControlled) {
+      setInternalOpen(false)
+    }
+
+    onClose?.()
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  /*
+  ========================================================
+  SWITCH SIGNUP
+  ========================================================
+  */
+
+  function switchToSignup() {
+    if (onSwitchToSignup) {
+      onSwitchToSignup()
+      return
+    }
+
+    window.dispatchEvent(
+      new Event(
+        "klyro-open-signup"
+      )
+    )
+  }
+
+  /*
+  ========================================================
+  LOGIN
+  ========================================================
+  */
+
+  async function handleSubmit(
+    event
+  ) {
+    event.preventDefault()
+
+    setError("")
+
+    if (
+      !email.trim() ||
+      !password
+    ) {
+      setError(
+        "Please enter your email and password."
+      )
+
+      return
+    }
 
     setLoading(true)
-    setError("")
-    setMessage("")
 
     try {
       const response =
         await fetch(
-          `${import.meta.env.VITE_API_URL}/api/auth/login`,
+          `${API_URL}/api/auth/login`,
           {
             method: "POST",
+
             headers: {
               "Content-Type":
                 "application/json",
             },
-            body: JSON.stringify(
-              formData
-            ),
+
+            body:
+              JSON.stringify({
+                email:
+                  email.trim(),
+
+                password,
+              }),
           }
         )
 
@@ -80,11 +212,16 @@ function Login() {
         await response.json()
 
       if (!response.ok) {
-        setError(
-          data.message ||
-            "Login failed"
+        throw new Error(
+          data?.message ||
+            "Login failed."
         )
-        return
+      }
+
+      if (!data?.token) {
+        throw new Error(
+          "Login succeeded but no authentication token was returned."
+        )
       }
 
       localStorage.setItem(
@@ -92,18 +229,26 @@ function Login() {
         data.token
       )
 
-      localStorage.setItem(
-        "klyro_user",
-        JSON.stringify(
-          data.user
+      if (data.user) {
+        localStorage.setItem(
+          "klyro_user",
+          JSON.stringify(
+            data.user
+          )
         )
-      )
+      }
 
       window.dispatchEvent(
         new Event(
           "klyro-auth-change"
         )
       )
+
+      /*
+      ======================================================
+      PENDING PROBLEM
+      ======================================================
+      */
 
       const pendingProblem =
         localStorage.getItem(
@@ -114,160 +259,433 @@ function Login() {
         "klyro_pending_problem"
       )
 
-      setMessage(
-        "Login successful!"
+      closePanel()
+
+      /*
+      ======================================================
+      OPTIONAL LEGACY ROUTE
+      ======================================================
+      */
+
+      if (
+        pendingProblem &&
+        !isControlled
+      ) {
+        navigate(
+          "/problem-details",
+          {
+            state: {
+              problem:
+                pendingProblem,
+            },
+          }
+        )
+
+        return
+      }
+
+      if (!isControlled) {
+        navigate("/")
+      }
+    } catch (error) {
+      console.error(
+        "LOGIN ERROR:",
+        error
       )
 
-      setTimeout(() => {
-        navigate("/", {
-          replace: true,
-          state: {
-            pendingProblem:
-              pendingProblem ||
-              "",
-          },
-        })
-      }, 500)
-    } catch (error) {
       setError(
-        "Unable to connect to the server."
+        error?.message ||
+          "Unable to login."
       )
     } finally {
       setLoading(false)
     }
   }
 
+  if (!open) {
+    return null
+  }
+
   return (
-    <div className="min-h-screen bg-[#08090D] px-4 py-10 text-white">
+    <div
+      className="
+        fixed
+        inset-0
+        z-[9999]
+        flex
+        items-center
+        justify-center
+        bg-black/70
+        p-4
+        backdrop-blur-md
+        sm:p-6
+      "
+      onMouseDown={(event) => {
+        if (
+          event.target ===
+          event.currentTarget
+        ) {
+          closePanel()
+        }
+      }}
+    >
+      <div
+        className="
+          relative
+          w-full
+          max-w-[460px]
+          overflow-hidden
+          rounded-[30px]
+          border
+          border-white/10
+          bg-[#0b0b13]
+          shadow-[0_30px_100px_rgba(0,0,0,0.65)]
+        "
+        onMouseDown={(event) =>
+          event.stopPropagation()
+        }
+      >
+        {/* TOP GLOW */}
 
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md items-center justify-center">
+        <div
+          className="
+            pointer-events-none
+            absolute
+            left-1/2
+            top-0
+            h-32
+            w-72
+            -translate-x-1/2
+            rounded-full
+            bg-purple-600/20
+            blur-[70px]
+          "
+        />
 
-        <div className="w-full rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
+        {/* CLOSE */}
 
-          <div className="text-center">
+        <button
+          type="button"
+          onClick={closePanel}
+          className="
+            absolute
+            right-4
+            top-4
+            z-20
+            flex
+            h-9
+            w-9
+            items-center
+            justify-center
+            rounded-full
+            border
+            border-white/10
+            bg-white/5
+            text-slate-400
+            transition
+            hover:bg-white/10
+            hover:text-white
+          "
+          aria-label="Close login"
+        >
+          ×
+        </button>
 
-            <Link
-              to="/"
-              className="text-2xl font-bold tracking-tight text-white"
+        <div className="relative p-6 sm:p-8">
+          {/* BRAND */}
+
+          <div className="mb-7">
+            <div
+              className="
+                mb-4
+                flex
+                items-center
+                gap-2
+              "
             >
-              KLYRO{" "}
-              <span className="text-violet-400">
+              <div
+                className="
+                  flex
+                  h-10
+                  w-10
+                  items-center
+                  justify-center
+                  rounded-xl
+                  bg-gradient-to-br
+                  from-purple-500
+                  to-cyan-500
+                  text-lg
+                  shadow-lg
+                  shadow-purple-950/30
+                "
+              >
                 ✦
-              </span>
-            </Link>
+              </div>
 
-            <h1 className="mt-8 text-2xl font-semibold">
+              <div>
+                <div
+                  className="
+                    text-lg
+                    font-bold
+                    tracking-tight
+                  "
+                >
+                  KLYRO
+                </div>
+
+                <div
+                  className="
+                    text-[10px]
+                    uppercase
+                    tracking-[0.2em]
+                    text-slate-600
+                  "
+                >
+                  Your next move
+                </div>
+              </div>
+            </div>
+
+            <h1
+              className="
+                text-2xl
+                font-bold
+                tracking-tight
+                text-white
+              "
+            >
               Welcome back
             </h1>
 
-            <p className="mt-2 text-sm text-slate-400">
-              Log in to continue with KLYRO.
+            <p
+              className="
+                mt-2
+                text-sm
+                leading-6
+                text-slate-500
+              "
+            >
+              Sign in to continue solving
+              problems with KLYRO.
             </p>
-
           </div>
 
-          {message && (
-            <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-300">
-              {message}
-            </div>
-          )}
+          {/* ERROR */}
 
           {error && (
-            <div className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-300">
+            <div
+              className="
+                mb-4
+                rounded-xl
+                border
+                border-red-400/15
+                bg-red-400/5
+                px-4
+                py-3
+                text-xs
+                leading-5
+                text-red-200
+              "
+            >
               {error}
             </div>
           )}
 
+          {/* FORM */}
+
           <form
-            onSubmit={
-              handleSubmit
-            }
-            className="mt-8 space-y-5"
+            onSubmit={handleSubmit}
+            className="space-y-4"
           >
+            {/* EMAIL */}
 
             <div>
-
               <label
-                htmlFor="email"
-                className="mb-2 block text-sm font-medium text-slate-300"
+                className="
+                  mb-2
+                  block
+                  text-xs
+                  font-medium
+                  text-slate-400
+                "
               >
                 Email
               </label>
 
               <input
-                id="email"
-                name="email"
                 type="email"
+                value={email}
+                onChange={(event) =>
+                  setEmail(
+                    event.target.value
+                  )
+                }
                 placeholder="you@example.com"
-                value={
-                  formData.email
-                }
-                onChange={
-                  handleChange
-                }
-                required
-                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400/50 focus:bg-white/[0.06]"
+                autoComplete="email"
+                className="
+                  h-12
+                  w-full
+                  rounded-xl
+                  border
+                  border-white/10
+                  bg-white/[0.035]
+                  px-4
+                  text-sm
+                  text-white
+                  outline-none
+                  transition
+                  placeholder:text-slate-700
+                  focus:border-purple-400/30
+                  focus:bg-white/[0.05]
+                  focus:ring-2
+                  focus:ring-purple-500/10
+                "
               />
-
             </div>
+
+            {/* PASSWORD */}
 
             <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label
+                  className="
+                    text-xs
+                    font-medium
+                    text-slate-400
+                  "
+                >
+                  Password
+                </label>
 
-              <label
-                htmlFor="password"
-                className="mb-2 block text-sm font-medium text-slate-300"
-              >
-                Password
-              </label>
+                <button
+                  type="button"
+                  className="
+                    text-[11px]
+                    text-purple-300/70
+                    hover:text-purple-200
+                  "
+                >
+                  Forgot password?
+                </button>
+              </div>
 
               <input
-                id="password"
-                name="password"
                 type="password"
+                value={password}
+                onChange={(event) =>
+                  setPassword(
+                    event.target.value
+                  )
+                }
                 placeholder="Enter your password"
-                value={
-                  formData.password
-                }
-                onChange={
-                  handleChange
-                }
-                required
-                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400/50 focus:bg-white/[0.06]"
+                autoComplete="current-password"
+                className="
+                  h-12
+                  w-full
+                  rounded-xl
+                  border
+                  border-white/10
+                  bg-white/[0.035]
+                  px-4
+                  text-sm
+                  text-white
+                  outline-none
+                  transition
+                  placeholder:text-slate-700
+                  focus:border-purple-400/30
+                  focus:bg-white/[0.05]
+                  focus:ring-2
+                  focus:ring-purple-500/10
+                "
               />
-
             </div>
+
+            {/* SUBMIT */}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-2xl bg-violet-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="
+                mt-2
+                flex
+                h-12
+                w-full
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                bg-gradient-to-r
+                from-purple-500
+                via-fuchsia-500
+                to-cyan-500
+                text-sm
+                font-semibold
+                text-white
+                shadow-lg
+                shadow-purple-950/30
+                transition
+                hover:scale-[1.01]
+                active:scale-[0.99]
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+              "
             >
               {loading
-                ? "Logging in..."
-                : "Log in"}
-            </button>
+                ? "Signing in..."
+                : "Sign in"}
 
+              {!loading && (
+                <span>↗</span>
+              )}
+            </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-slate-400">
+          {/* SWITCH */}
 
-            Don't have an account?{" "}
+          <div
+            className="
+              mt-6
+              text-center
+              text-xs
+              text-slate-600
+            "
+          >
+            Don't have an account?
 
-            <Link
-              to="/signup"
-              className="font-medium text-violet-400 transition hover:text-violet-300"
+            <button
+              type="button"
+              onClick={
+                switchToSignup
+              }
+              className="
+                ml-1.5
+                font-medium
+                text-purple-300
+                hover:text-purple-200
+              "
             >
-              Sign up
-            </Link>
+              Create account
+            </button>
+          </div>
 
-          </p>
+          {/* LEGACY LINK */}
 
+          {!isControlled && (
+            <div className="mt-4 text-center">
+              <Link
+                to="/"
+                className="
+                  text-[11px]
+                  text-slate-700
+                  hover:text-slate-500
+                "
+              >
+                Back to KLYRO
+              </Link>
+            </div>
+          )}
         </div>
-
       </div>
-
     </div>
   )
 }
-
-export default Login

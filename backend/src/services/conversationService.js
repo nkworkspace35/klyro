@@ -824,11 +824,10 @@ an Education qualification.
 Do not classify information based on
 your own assumptions.
 
-Do not merge Education, Projects,
-Certifications, Skills, Experience,
-Achievements, Interests, or other sections
-unless the user explicitly asks for
-a combined analysis.
+Do not merge Education, Projects, Certifications,
+Skills, Experience, Achievements, Interests,
+or other sections unless the user explicitly asks
+for a combined analysis.
 
 If the document's section/category is clear,
 preserve that category.
@@ -1214,9 +1213,6 @@ function getDocumentText(file) {
     return ""
   }
 
-  /*
-   * Primary property created by fileController.js
-   */
   if (
     typeof file.text === "string" &&
     file.text.trim()
@@ -1224,9 +1220,6 @@ function getDocumentText(file) {
     return file.text.trim()
   }
 
-  /*
-   * Alternative property names
-   */
   if (
     typeof file.extractedText === "string" &&
     file.extractedText.trim()
@@ -1288,9 +1281,6 @@ function buildAttachmentContext(
         const fileText =
           getDocumentText(file)
 
-        /*
-         * Actual extracted document content.
-         */
         if (fileText) {
 
           const limitedText =
@@ -1341,9 +1331,6 @@ END DOCUMENT CONTENT
 
         }
 
-        /*
-         * No readable text.
-         */
         return `
 [BEGIN DOCUMENT]
 
@@ -1545,71 +1532,42 @@ function cleanMarkdownArtifacts(
       "\n"
     )
 
-  /*
-   * Convert escaped Markdown pipes
-   * back into normal pipes.
-   */
   result =
     result.replace(
       /\\\|/g,
       "|"
     )
 
-  /*
-   * Remove boxed math wrapper.
-   */
   result =
     result.replace(
       /\\boxed\{([^{}]+)\}/g,
       "$1"
     )
 
-  /*
-   * Remove accidental square-bracket-only
-   * equation formatting.
-   */
   result =
     result.replace(
       /^\s*\[\s*([^\n]+?)\s*\]\s*$/gm,
       "$1"
     )
 
-  /*
-   * Remove HTML line-break tags.
-   *
-   * This protects the final answer even if
-   * the model accidentally outputs them.
-   */
   result =
     result.replace(
       /<br\s*\/?>/gi,
       "\n"
     )
 
-  /*
-   * Remove common HTML formatting tags.
-   *
-   * These are presentation tags and should
-   * not appear in the final Markdown answer.
-   */
   result =
     result.replace(
       /<\/?(?:b|strong|i|em|u|p|div|span)\b[^>]*>/gi,
       ""
     )
 
-  /*
-   * Clean trailing spaces.
-   */
   result =
     result.replace(
       /[ \t]+\n/g,
       "\n"
     )
 
-  /*
-   * Avoid excessive blank lines.
-   */
   result =
     result.replace(
       /\n{3,}/g,
@@ -1708,19 +1666,12 @@ function cleanFinalResponse(
       result
     )
 
-  /*
-   * Final safety cleanup for HTML line breaks.
-   */
   result =
     result.replace(
       /<br\s*\/?>/gi,
       "\n"
     )
 
-  /*
-   * Final safety cleanup for common
-   * formatting-only HTML tags.
-   */
   result =
     result.replace(
       /<\/?(?:b|strong|i|em|u|p|div|span)\b[^>]*>/gi,
@@ -1939,10 +1890,6 @@ async function saveMessage({
         ]
       )
 
-    /*
-     * Update conversation timestamp
-     * whenever a new message is added.
-     */
     await client.query(
       `
         UPDATE conversations
@@ -2033,6 +1980,10 @@ async function saveAttachment({
 
 /**
  * Get all messages of a conversation.
+ *
+ * Attachments are returned together with
+ * every message so the frontend can restore
+ * the conversation correctly.
  */
 async function getConversationMessages(
   conversationId,
@@ -2055,12 +2006,36 @@ async function getConversationMessages(
       m.role,
       m.content,
       m.model,
-      m.created_at
+      m.created_at,
+
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', a.id,
+              'fileName', a.file_name,
+              'fileType', a.file_type,
+              'fileUrl', a.file_url,
+              'extractedText', a.extracted_text,
+              'extractionMethod', a.extraction_method,
+              'createdAt', a.created_at
+            )
+            ORDER BY a.created_at ASC
+          )
+          FROM attachments a
+          WHERE a.message_id = m.id
+        ),
+        '[]'::json
+      ) AS attachments
+
     FROM messages m
+
     INNER JOIN conversations c
       ON c.id = m.conversation_id
+
     WHERE m.conversation_id = $1
       AND c.user_id = $2
+
     ORDER BY m.created_at ASC
   `
 
@@ -2179,9 +2154,6 @@ async function deleteConversation(
 
 module.exports = {
 
-  /*
-   * Existing AI helpers
-   */
   detectLanguage,
 
   detectLanguageFromHistory,
@@ -2198,10 +2170,6 @@ module.exports = {
 
   cleanFinalResponse,
 
-
-  /*
-   * PostgreSQL conversation helpers
-   */
   createConversation,
 
   getUserConversations,
