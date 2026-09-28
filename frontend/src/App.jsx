@@ -19,23 +19,14 @@ import Signup from "./pages/Signup"
 import ProblemDetails from "./pages/ProblemDetails"
 
 function Home() {
-  const [isLoggedIn, setIsLoggedIn] =
-    useState(
-      Boolean(
-        localStorage.getItem(
-          "klyro_token"
-        )
-      )
-    )
+  const [isLoggedIn, setIsLoggedIn] = useState(
+    Boolean(localStorage.getItem("klyro_token"))
+  )
 
   useEffect(() => {
     const syncAuth = () => {
       setIsLoggedIn(
-        Boolean(
-          localStorage.getItem(
-            "klyro_token"
-          )
-        )
+        Boolean(localStorage.getItem("klyro_token"))
       )
     }
 
@@ -44,103 +35,67 @@ function Home() {
       syncAuth
     )
 
-    window.addEventListener(
-      "storage",
-      syncAuth
-    )
-
     return () => {
       window.removeEventListener(
         "klyro-auth-change",
-        syncAuth
-      )
-
-      window.removeEventListener(
-        "storage",
         syncAuth
       )
     }
   }, [])
 
   return (
-    <>
+    <div className="min-h-screen bg-[#08090D] text-white">
       <Navbar />
 
       <main>
-
         <Hero />
 
-        {isLoggedIn && (
-          <DashboardSection />
-        )}
+        {isLoggedIn && <DashboardSection />}
 
         <HowItWorks />
-
         <Features />
-
         <FinalCTA />
-
       </main>
 
       <Footer />
-    </>
+    </div>
   )
 }
 
 function App() {
   return (
     <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={<Home />}
+        />
 
-      <div className="min-h-screen bg-[#08090D] text-white">
+        <Route
+          path="/login"
+          element={<Login />}
+        />
 
-        <Routes>
+        <Route
+          path="/signup"
+          element={<Signup />}
+        />
 
-          <Route
-            path="/"
-            element={<Home />}
-          />
+        <Route
+          path="/problems/:id"
+          element={<ProblemDetails />}
+        />
 
-          <Route
-            path="/login"
-            element={<Login />}
-          />
+        <Route
+          path="/dashboard"
+          element={<Navigate to="/" replace />}
+        />
 
-          <Route
-            path="/signup"
-            element={<Signup />}
-          />
-
-          <Route
-            path="/problems/:id"
-            element={
-              <ProblemDetails />
-            }
-          />
-
-          <Route
-            path="/dashboard"
-            element={
-              <Navigate
-                to="/"
-                replace
-              />
-            }
-          />
-
-          <Route
-            path="*"
-            element={
-              <Navigate
-                to="/"
-                replace
-              />
-            }
-          />
-
-        </Routes>
-
-      </div>
-
+        <Route
+          path="*"
+          element={<Navigate to="/" replace />}
+        />
+      </Routes>
     </BrowserRouter>
   )
 }

@@ -2,10 +2,11 @@ const jwt = require("jsonwebtoken")
 
 const authenticateToken = (req, res, next) => {
   try {
-    // Authorization header se token lena
+    // ==========================================
+    // 1. Authorization header se token lena
+    // ==========================================
     const authHeader = req.headers.authorization
 
-    // Token nahi mila
     if (!authHeader) {
       return res.status(401).json({
         success: false,
@@ -13,32 +14,95 @@ const authenticateToken = (req, res, next) => {
       })
     }
 
-    // "Bearer TOKEN" ko split karna
-    const token = authHeader.split(" ")[1]
+    // ==========================================
+    // 2. Authorization format check karna
+    // Expected:
+    // Authorization: Bearer YOUR_TOKEN
+    // ==========================================
+    const parts = authHeader.trim().split(/\s+/)
 
-    // Token missing hai
-    if (!token) {
+    if (parts.length !== 2 || parts[0].toLowerCase() !== "bearer") {
       return res.status(401).json({
         success: false,
         message: "Invalid authorization format",
       })
     }
 
-    // JWT verify karna
+    const token = parts[1]
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Access token required",
+      })
+    }
+
+    // ==========================================
+    // 3. JWT_SECRET check
+    // ==========================================
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET is not configured in .env")
+
+      return res.status(500).json({
+        success: false,
+        message: "Server authentication configuration error",
+      })
+    }
+
+    // ==========================================
+    // 4. JWT verify karna
+    // ==========================================
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET
     )
 
-    // User information request ke saath attach karna
+    // ==========================================
+    // 5. Decoded user information validate karna
+    // ==========================================
+    if (!decoded || typeof decoded !== "object") {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid access token",
+      })
+    }
+
+    // ==========================================
+    // 6. User information request ke saath attach
+    // ==========================================
     req.user = decoded
 
-    // Next middleware/controller par jaana
+    // ==========================================
+    // 7. Next middleware/controller
+    // ==========================================
     next()
+
   } catch (error) {
+    // ==========================================
+    // JWT errors
+    // ==========================================
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        success: false,
+        message: "Access token expired",
+      })
+    }
+
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid access token",
+      })
+    }
+
+    // ==========================================
+    // Other authentication errors
+    // ==========================================
+    console.error("Authentication error:", error.message)
+
     return res.status(401).json({
       success: false,
-      message: "Invalid or expired token",
+      message: "Authentication failed",
     })
   }
 }

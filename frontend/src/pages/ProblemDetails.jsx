@@ -1,203 +1,169 @@
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom"
 
-import Navbar from "../components/Navbar"
+const API_URL = import.meta.env.VITE_API_URL
 
 function ProblemDetails() {
-  const navigate = useNavigate()
   const { id } = useParams()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+
+  const mode = searchParams.get("mode")
+
+  const isResearchMode = mode === "research"
+  const isGuidanceMode = mode === "guidance"
 
   const [problem, setProblem] = useState(null)
-
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [successMessage, setSuccessMessage] = useState("")
+  const [updating, setUpdating] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
 
-  const [updatingStatus, setUpdatingStatus] = useState(false)
-  const [deletingProblem, setDeletingProblem] = useState(false)
+  const getToken = () => {
+    return localStorage.getItem("klyro_token")
+  }
 
-  const [editingProblem, setEditingProblem] = useState(false)
-  const [savingProblem, setSavingProblem] = useState(false)
+  const loadProblem = async () => {
+    const token = getToken()
 
-  const [editTitle, setEditTitle] = useState("")
-  const [editDescription, setEditDescription] = useState("")
+    if (!token) {
+      navigate("/login")
+      return
+    }
 
-  const [regeneratingAI, setRegeneratingAI] =
-    useState(false)
+    try {
+      setLoading(true)
+      setError("")
 
-  const [actions, setActions] = useState([])
-  const [updatingAction, setUpdatingAction] =
-    useState(null)
+      const response = await fetch(
+        `${API_URL}/api/problems/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
 
-  /*
-   * FETCH PROBLEM
-   */
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || "Unable to load this problem."
+        )
+      }
+
+      const loadedProblem =
+        data.problem ||
+        data.data?.problem ||
+        data.data
+
+      setProblem(loadedProblem)
+    } catch (err) {
+      console.error("Problem details error:", err)
+
+      setError(
+        err.message ||
+          "Unable to load this problem."
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    const fetchProblem = async () => {
-      try {
-        const token =
-          localStorage.getItem("klyro_token")
+    loadProblem()
+  }, [id])
 
-        if (!token) {
-          navigate("/login", {
-            replace: true,
-          })
-          return
+  const solution = useMemo(() => {
+    if (!problem) return null
+
+    if (problem.ai_solution) {
+      if (typeof problem.ai_solution === "string") {
+        try {
+          return JSON.parse(problem.ai_solution)
+        } catch {
+          return null
         }
-
-        setLoading(true)
-        setError("")
-
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/problems/${id}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        )
-
-        const data = await response.json()
-
-        if (!response.ok) {
-          setError(
-            data.message ||
-              "Unable to load problem."
-          )
-          return
-        }
-
-        setProblem(data.problem)
-
-        setActions(
-          data.problem.actions || []
-        )
-
-        setEditTitle(
-          data.problem.title || ""
-        )
-
-        setEditDescription(
-          data.problem.description || ""
-        )
-      } catch (error) {
-        setError(
-          "Unable to connect to the server."
-        )
-      } finally {
-        setLoading(false)
       }
+
+      return problem.ai_solution
     }
 
-    fetchProblem()
-  }, [id, navigate])
+    if (problem.aiResponse) {
+      if (typeof problem.aiResponse === "string") {
+        try {
+          return JSON.parse(problem.aiResponse)
+        } catch {
+          return null
+        }
+      }
 
-  /*
-   * ACTION PROGRESS
-   */
-  const completedActions = useMemo(() => {
-    return actions.filter(
-      (action) => action.completed
-    ).length
-  }, [actions])
-
-  const actionProgress = useMemo(() => {
-    if (actions.length === 0) {
-      return 0
+      return problem.aiResponse
     }
 
-    return Math.round(
-      (completedActions / actions.length) * 100
-    )
-  }, [actions.length, completedActions])
+    return null
+  }, [problem])
 
-  /*
-   * START EDITING
-   */
-  const handleStartEditing = () => {
-    if (
-      !problem ||
-      deletingProblem ||
-      updatingStatus ||
-      regeneratingAI ||
-      updatingAction
-    ) {
-      return
+  const actions = useMemo(() => {
+    if (!problem) return []
+
+    if (Array.isArray(problem.actions)) {
+      return problem.actions
     }
 
-    setError("")
-    setSuccessMessage("")
-
-    setEditTitle(
-      problem.title || ""
-    )
-
-    setEditDescription(
-      problem.description || ""
-    )
-
-    setEditingProblem(true)
-  }
-
-  /*
-   * CANCEL EDITING
-   */
-  const handleCancelEditing = () => {
-    if (savingProblem) {
-      return
-    }
-
-    setEditTitle(
-      problem.title || ""
-    )
-
-    setEditDescription(
-      problem.description || ""
-    )
-
-    setEditingProblem(false)
-    setError("")
-  }
-
-  /*
-   * SAVE EDITED PROBLEM
-   */
-  const handleSaveProblem = async () => {
-    if (
-      !problem ||
-      savingProblem ||
-      deletingProblem ||
-      regeneratingAI
-    ) {
-      return
-    }
-
-    setError("")
-    setSuccessMessage("")
-
-    if (!editDescription.trim()) {
-      setError(
-        "Problem description is required."
+    if (solution?.action_plan) {
+      return solution.action_plan.map(
+        (action, index) => ({
+          id:
+            action.id ||
+            `temporary-${index}`,
+          step_number:
+            action.step ||
+            index + 1,
+          title:
+            action.title ||
+            `Step ${index + 1}`,
+          description:
+            action.description || "",
+          completed:
+            Boolean(action.completed),
+        })
       )
+    }
+
+    return []
+  }, [problem, solution])
+
+  const completedActions = actions.filter(
+    (action) => action.completed
+  ).length
+
+  const progress =
+    actions.length > 0
+      ? Math.round(
+          (completedActions / actions.length) * 100
+        )
+      : 0
+
+  const updateStatus = async (status) => {
+    const token = getToken()
+
+    if (!token) {
+      navigate("/login")
       return
     }
 
     try {
-      setSavingProblem(true)
-
-      const token =
-        localStorage.getItem("klyro_token")
-
-      if (!token) {
-        navigate("/login", {
-          replace: true,
-        })
-        return
-      }
+      setUpdating(true)
+      setError("")
 
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/problems/${id}`,
+        `${API_URL}/api/problems/${id}/status`,
         {
           method: "PATCH",
           headers: {
@@ -205,245 +171,59 @@ function ProblemDetails() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            title:
-              editTitle.trim() ||
-              "Untitled problem",
-            description:
-              editDescription.trim(),
+            status,
           }),
         }
       )
 
       const data = await response.json()
 
-      if (!response.ok) {
-        setError(
-          data.message ||
-            "Unable to update problem."
-        )
-        return
-      }
-
-      setProblem(data.problem)
-
-      setActions([])
-
-      setEditTitle(
-        data.problem.title || ""
-      )
-
-      setEditDescription(
-        data.problem.description || ""
-      )
-
-      setEditingProblem(false)
-
-      setSuccessMessage(
-        "Problem updated. Generate a fresh AI solution."
-      )
-    } catch (error) {
-      setError(
-        "Unable to connect to the server."
-      )
-    } finally {
-      setSavingProblem(false)
-    }
-  }
-
-  /*
-   * REGENERATE AI
-   */
-  const handleRegenerateAI = async () => {
-    if (
-      !problem ||
-      regeneratingAI ||
-      savingProblem ||
-      deletingProblem ||
-      editingProblem ||
-      updatingStatus ||
-      updatingAction
-    ) {
-      return
-    }
-
-    try {
-      setError("")
-      setSuccessMessage("")
-      setRegeneratingAI(true)
-
-      const token =
-        localStorage.getItem("klyro_token")
-
-      if (!token) {
-        navigate("/login", {
-          replace: true,
-        })
-        return
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/solve-problem`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            problemId: problem.id,
-          }),
-        }
-      )
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(
-          data.message ||
-            "Unable to generate AI solution."
-        )
-        return
-      }
-
-      if (data.problem) {
-        setProblem(data.problem)
-
-        setActions(
-          data.problem.actions || []
-        )
-      }
-
-      setSuccessMessage(
-        "Fresh AI solution generated successfully."
-      )
-    } catch (error) {
-      setError(
-        "Unable to connect to the server."
-      )
-    } finally {
-      setRegeneratingAI(false)
-    }
-  }
-
-  /*
-   * UPDATE PROBLEM STATUS
-   */
-  const handleStatusChange = async (
-    newStatus
-  ) => {
-    if (
-      !problem ||
-      updatingStatus ||
-      deletingProblem ||
-      editingProblem ||
-      regeneratingAI ||
-      updatingAction
-    ) {
-      return
-    }
-
-    if (
-      problem.status === newStatus
-    ) {
-      return
-    }
-
-    try {
-      setError("")
-      setSuccessMessage("")
-      setUpdatingStatus(true)
-
-      const token =
-        localStorage.getItem("klyro_token")
-
-      if (!token) {
-        navigate("/login", {
-          replace: true,
-        })
-        return
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/problems/${id}/status`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            status: newStatus,
-          }),
-        }
-      )
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(
+      if (!response.ok || !data.success) {
+        throw new Error(
           data.message ||
             "Unable to update problem status."
         )
-        return
       }
 
       setProblem((current) => ({
         ...current,
-        ...data.problem,
-        actions: actions,
+        ...(data.problem || data.data?.problem || {}),
+        status:
+          data.problem?.status ||
+          data.data?.problem?.status ||
+          status,
       }))
 
-      setSuccessMessage(
-        "Problem status updated."
+      window.dispatchEvent(
+        new CustomEvent("klyro-problems-refresh")
       )
-    } catch (error) {
-      setError(
-        "Unable to update problem status."
-      )
+    } catch (err) {
+      setError(err.message)
     } finally {
-      setUpdatingStatus(false)
+      setUpdating(false)
     }
   }
 
-  /*
-   * DELETE PROBLEM
-   */
-  const handleDeleteProblem = async () => {
-    if (
-      !problem ||
-      deletingProblem ||
-      editingProblem ||
-      regeneratingAI ||
-      updatingAction
-    ) {
-      return
-    }
-
+  const deleteProblem = async () => {
     const confirmed = window.confirm(
-      "Are you sure you want to delete this problem? This action cannot be undone."
+      "Are you sure you want to delete this problem?"
     )
 
-    if (!confirmed) {
+    if (!confirmed) return
+
+    const token = getToken()
+
+    if (!token) {
+      navigate("/login")
       return
     }
 
     try {
+      setUpdating(true)
       setError("")
-      setSuccessMessage("")
-      setDeletingProblem(true)
-
-      const token =
-        localStorage.getItem("klyro_token")
-
-      if (!token) {
-        navigate("/login", {
-          replace: true,
-        })
-        return
-      }
 
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/problems/${id}`,
+        `${API_URL}/api/problems/${id}`,
         {
           method: "DELETE",
           headers: {
@@ -454,1244 +234,787 @@ function ProblemDetails() {
 
       const data = await response.json()
 
-      if (!response.ok) {
-        setError(
+      if (!response.ok || !data.success) {
+        throw new Error(
           data.message ||
-            "Unable to delete problem."
+            "Unable to delete this problem."
         )
-        return
       }
 
       window.dispatchEvent(
-        new Event(
-          "klyro-problems-refresh"
-        )
+        new CustomEvent("klyro-problems-refresh")
       )
 
-      navigate("/", {
-        replace: true,
-      })
-    } catch (error) {
-      setError(
-        "Unable to connect to the server."
-      )
-    } finally {
-      setDeletingProblem(false)
+      navigate("/")
+    } catch (err) {
+      setError(err.message)
+      setUpdating(false)
     }
   }
 
-  /*
-   * TOGGLE CHECKLIST ACTION
-   */
-  const handleToggleAction = async (
-    actionId
-  ) => {
-    if (
-      !problem ||
-      updatingAction ||
-      regeneratingAI ||
-      savingProblem ||
-      deletingProblem ||
-      updatingStatus
-    ) {
+  const toggleAction = async (action) => {
+    if (!action?.id) return
+
+    if (String(action.id).startsWith("temporary-")) {
       return
     }
 
-    try {
-      setError("")
-      setSuccessMessage("")
-      setUpdatingAction(actionId)
+    const token = getToken()
 
-      const token =
-        localStorage.getItem("klyro_token")
+    if (!token) {
+      navigate("/login")
+      return
+    }
 
-      if (!token) {
-        navigate("/login", {
-          replace: true,
-        })
-        return
+    const newCompleted = !action.completed
+
+    setProblem((current) => {
+      if (!current) return current
+
+      return {
+        ...current,
+        actions: (current.actions || []).map(
+          (item) =>
+            item.id === action.id
+              ? {
+                  ...item,
+                  completed: newCompleted,
+                }
+              : item
+        ),
       }
+    })
 
+    try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/problems/${problem.id}/actions/${actionId}`,
+        `${API_URL}/api/problems/${id}/actions/${action.id}`,
         {
           method: "PATCH",
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify({
+            completed: newCompleted,
+          }),
         }
       )
 
       const data = await response.json()
 
-      if (!response.ok) {
-        setError(
+      if (!response.ok || !data.success) {
+        throw new Error(
           data.message ||
             "Unable to update action."
         )
-        return
       }
 
-      setActions((current) =>
-        current.map((action) =>
-          action.id === actionId
-            ? data.action
-            : action
-        )
-      )
-    } catch (error) {
-      setError(
-        "Unable to connect to the server."
-      )
-    } finally {
-      setUpdatingAction(null)
+      if (data.action) {
+        setProblem((current) => {
+          if (!current) return current
+
+          return {
+            ...current,
+            actions: (current.actions || []).map(
+              (item) =>
+                item.id === action.id
+                  ? {
+                      ...item,
+                      ...data.action,
+                    }
+                  : item
+            ),
+          }
+        })
+      }
+    } catch (err) {
+      setError(err.message)
+
+      setProblem((current) => {
+        if (!current) return current
+
+        return {
+          ...current,
+          actions: (current.actions || []).map(
+            (item) =>
+              item.id === action.id
+                ? {
+                    ...item,
+                    completed: action.completed,
+                  }
+                : item
+          ),
+        }
+      })
     }
   }
 
-  /*
-   * STATUS LABEL
-   */
-  const getStatusLabel = (
-    status
-  ) => {
-    if (status === "in_progress") {
-      return "In progress"
+  const regenerateSolution = async () => {
+    const token = getToken()
+
+    if (!token) {
+      navigate("/login")
+      return
     }
 
+    try {
+      setRegenerating(true)
+      setError("")
+
+      const response = await fetch(
+        `${API_URL}/api/solve-problem`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            problemId: id,
+          }),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            "Unable to regenerate the solution."
+        )
+      }
+
+      const updatedProblem =
+        data.problem ||
+        data.data?.problem ||
+        data.data
+
+      if (updatedProblem) {
+        setProblem(updatedProblem)
+      } else {
+        await loadProblem()
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("klyro-problems-refresh")
+      )
+    } catch (err) {
+      console.error(
+        "Regenerate solution error:",
+        err
+      )
+
+      setError(
+        err.message ||
+          "Unable to regenerate the solution."
+      )
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
+  const getStatusLabel = (status) => {
     if (status === "resolved") {
       return "Resolved"
+    }
+
+    if (status === "in_progress") {
+      return "In progress"
     }
 
     return "Active"
   }
 
-  /*
-   * CATEGORY LABEL
-   */
-  const getCategoryLabel = (
-    category
-  ) => {
-    const categories = {
-      career: "Career",
-      education: "Education",
-      work: "Work",
-      finance: "Finance",
-      personal: "Personal",
-      technology: "Technology",
-      other: "Other",
+  const getStatusClass = (status) => {
+    if (status === "resolved") {
+      return "border-emerald-400/10 bg-emerald-400/10 text-emerald-300"
     }
 
-    return (
-      categories[category] ||
-      "Other"
-    )
+    if (status === "in_progress") {
+      return "border-amber-400/10 bg-amber-400/10 text-amber-300"
+    }
+
+    return "border-violet-400/10 bg-violet-400/10 text-violet-300"
   }
 
-  /*
-   * PRIORITY LABEL
-   */
-  const getPriorityLabel = (
-    priority
-  ) => {
-    if (priority === "high") {
-      return "High priority"
+  const getPriorityClass = (priority) => {
+    if (!priority) return ""
+
+    const value = String(priority).toLowerCase()
+
+    if (value === "high") {
+      return "border-rose-400/10 bg-rose-400/10 text-rose-300"
     }
 
-    if (priority === "low") {
-      return "Low priority"
+    if (value === "medium") {
+      return "border-amber-400/10 bg-amber-400/10 text-amber-300"
     }
 
-    return "Medium priority"
+    return "border-emerald-400/10 bg-emerald-400/10 text-emerald-300"
   }
 
-  /*
-   * PRIORITY STYLE
-   */
-  const getPriorityStyle = (
-    priority
-  ) => {
-    if (priority === "high") {
-      return "border-rose-400/20 bg-rose-400/10 text-rose-300"
-    }
-
-    if (priority === "low") {
-      return "border-slate-400/20 bg-slate-400/10 text-slate-300"
-    }
-
-    return "border-amber-400/20 bg-amber-400/10 text-amber-300"
-  }
-
-  /*
-   * LOADING
-   */
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#08090D] text-white">
-        <Navbar />
-
-        <main className="mx-auto max-w-5xl px-4 pb-10 pt-24 sm:px-6 lg:px-8">
-
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
-
-            <div className="flex items-center gap-3">
-
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-violet-400" />
-
-              <p className="text-sm text-slate-400">
-                Loading problem...
-              </p>
-
+      <div className="min-h-screen bg-[#08090D] px-6 py-20 text-white">
+        <div className="mx-auto max-w-5xl">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 text-xl text-violet-300">
+              ✦
             </div>
 
+            <p className="text-sm text-slate-500">
+              Loading your KLYRO guidance...
+            </p>
           </div>
-
-        </main>
+        </div>
       </div>
     )
   }
 
-  /*
-   * ERROR WITHOUT PROBLEM
-   */
   if (error && !problem) {
     return (
-      <div className="min-h-screen bg-[#08090D] text-white">
-        <Navbar />
+      <div className="min-h-screen bg-[#08090D] px-6 py-20 text-white">
+        <div className="mx-auto max-w-2xl">
+          <div className="rounded-3xl border border-rose-400/10 bg-rose-500/5 p-8 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-300">
+              !
+            </div>
 
-        <main className="mx-auto max-w-5xl px-4 pb-10 pt-24 sm:px-6 lg:px-8">
+            <h1 className="mt-4 text-xl font-semibold text-white">
+              Something went wrong
+            </h1>
 
-          <button
-            type="button"
-            onClick={() =>
-              navigate("/")
-            }
-            className="mb-6 text-sm text-slate-400 transition hover:text-white"
-          >
-            ← Back to KLYRO
-          </button>
-
-          <div className="rounded-3xl border border-rose-400/20 bg-rose-400/10 p-6">
-
-            <p className="text-sm text-rose-300">
+            <p className="mt-2 text-sm leading-6 text-slate-400">
               {error}
             </p>
 
-          </div>
+            <div className="mt-6 flex justify-center gap-3">
+              <button
+                onClick={loadProblem}
+                className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black"
+              >
+                Try again
+              </button>
 
-        </main>
+              <Link
+                to="/"
+                className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300"
+              >
+                Back to KLYRO
+              </Link>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
 
-  /*
-   * MAIN PAGE
-   */
+  if (!problem) {
+    return null
+  }
+
   return (
     <div className="min-h-screen bg-[#08090D] text-white">
+      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#08090D]/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 lg:px-8">
+          <Link
+            to="/"
+            className="text-xl font-semibold tracking-tight text-white"
+          >
+            KLYRO <span className="text-violet-400">✦</span>
+          </Link>
 
-      <Navbar />
+          <Link
+            to="/"
+            className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            ← Back
+          </Link>
+        </div>
+      </header>
 
-      <main className="mx-auto max-w-5xl px-4 pb-16 pt-24 sm:px-6 lg:px-8">
+      <main className="px-6 py-10 lg:px-8 lg:py-14">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-8">
+            {isResearchMode ? (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">
+                  Deep Research
+                </p>
 
-        {/* BACK */}
-        <button
-          type="button"
-          onClick={() =>
-            navigate("/")
-          }
-          className="mb-8 text-sm text-slate-500 transition hover:text-white"
-        >
-          ← Back to KLYRO
-        </button>
-
-        {/* PROBLEM HEADER */}
-        <section className="mb-8">
-
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-
-            <div className="min-w-0 flex-1">
-
-              <p className="text-sm font-medium text-violet-400">
-                Problem
-              </p>
-
-              {!editingProblem && (
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  {problem.title ||
-                    "Untitled problem"}
+                  Let’s go deeper.
                 </h1>
-              )}
 
-              {editingProblem && (
-                <div className="mt-4">
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
+                  A deeper breakdown of your problem,
+                  possible causes, options and next
+                  actions.
+                </p>
+              </>
+            ) : isGuidanceMode ? (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">
+                  Guidance
+                </p>
 
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={(e) =>
-                      setEditTitle(
-                        e.target.value
-                      )
-                    }
-                    placeholder="Problem title"
-                    disabled={
-                      savingProblem
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-[#0D0F15] px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400/50 disabled:opacity-60"
-                  />
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  Let’s figure this out.
+                </h1>
 
-                </div>
-              )}
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
+                  Step-by-step guidance to move from
+                  stuck to sorted.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">
+                  KLYRO
+                </p>
 
-              {!editingProblem && (
-                <div className="mt-4 flex flex-wrap items-center gap-2">
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  Your problem, broken down.
+                </h1>
 
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-400">
-                    {getCategoryLabel(
-                      problem.category
-                    )}
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
+                  Here’s a structured breakdown of your
+                  problem and what you can do next.
+                </p>
+              </>
+            )}
+          </div>
+
+          {error && (
+            <div className="mb-6 rounded-2xl border border-rose-400/10 bg-rose-500/5 px-4 py-3 text-sm text-rose-300">
+              {error}
+            </div>
+          )}
+
+          <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl shadow-black/20 backdrop-blur-xl">
+            <div className="border-b border-white/[0.06] p-6 sm:p-8">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full border px-3 py-1.5 text-xs ${getStatusClass(
+                    problem.status
+                  )}`}
+                >
+                  {getStatusLabel(problem.status)}
+                </span>
+
+                {problem.category && (
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-400">
+                    {problem.category}
                   </span>
+                )}
 
+                {problem.priority && (
                   <span
-                    className={`rounded-full border px-3 py-1 text-xs ${getPriorityStyle(
+                    className={`rounded-full border px-3 py-1.5 text-xs ${getPriorityClass(
                       problem.priority
                     )}`}
                   >
-                    {getPriorityLabel(
-                      problem.priority
-                    )}
+                    {problem.priority}
                   </span>
-
-                </div>
-              )}
-
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-
-              <span
-                className={`w-fit rounded-full px-3 py-1 text-xs ${
-                  problem.status ===
-                  "resolved"
-                    ? "border border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
-                    : problem.status ===
-                      "in_progress"
-                    ? "border border-violet-400/20 bg-violet-400/10 text-violet-300"
-                    : "border border-amber-400/20 bg-amber-400/10 text-amber-300"
-                }`}
-              >
-                {getStatusLabel(
-                  problem.status
                 )}
-              </span>
+              </div>
 
-              {!editingProblem && (
-                <button
-                  type="button"
-                  disabled={
-                    deletingProblem ||
-                    updatingStatus ||
-                    regeneratingAI ||
-                    updatingAction
-                  }
-                  onClick={
-                    handleStartEditing
-                  }
-                  className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 transition hover:bg-violet-500/20 hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Edit
-                </button>
-              )}
+              <h2 className="mt-5 text-2xl font-semibold text-white sm:text-3xl">
+                {problem.title ||
+                  "Untitled problem"}
+              </h2>
 
-              <button
-                type="button"
-                disabled={
-                  deletingProblem ||
-                  updatingStatus ||
-                  editingProblem ||
-                  regeneratingAI ||
-                  updatingAction
-                }
-                onClick={
-                  handleDeleteProblem
-                }
-                className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-400/20 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {deletingProblem
-                  ? "Deleting..."
-                  : "Delete"}
-              </button>
-
+              <div className="mt-4 rounded-2xl border border-white/[0.06] bg-black/10 p-5">
+                <p className="whitespace-pre-wrap text-sm leading-7 text-slate-300">
+                  {problem.description}
+                </p>
+              </div>
             </div>
 
-          </div>
-
-        </section>
-
-        {/* EDIT */}
-        {editingProblem && (
-          <section className="mb-8">
-
-            <div className="rounded-3xl border border-violet-400/20 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 backdrop-blur-xl sm:p-6">
-
-              <div className="mb-4">
-
-                <p className="text-sm font-semibold text-white">
-                  Edit your problem
-                </p>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  Update the details of your problem.
-                </p>
-
-              </div>
-
-              <textarea
-                value={editDescription}
-                onChange={(e) =>
-                  setEditDescription(
-                    e.target.value
-                  )
-                }
-                placeholder="Describe your problem..."
-                rows="8"
-                disabled={
-                  savingProblem
-                }
-                className="w-full resize-none rounded-2xl border border-white/10 bg-[#0D0F15] px-4 py-4 text-sm leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400/50 disabled:opacity-60"
-              />
-
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-end">
-
-                <button
-                  type="button"
-                  disabled={
-                    savingProblem
-                  }
-                  onClick={
-                    handleCancelEditing
-                  }
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  disabled={
-                    savingProblem ||
-                    !editDescription.trim()
-                  }
-                  onClick={
-                    handleSaveProblem
-                  }
-                  className="rounded-xl bg-violet-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {savingProblem
-                    ? "Saving..."
-                    : "Save changes"}
-                </button>
-
-              </div>
-
-            </div>
-
-          </section>
-        )}
-
-        {/* SUCCESS */}
-        {successMessage && (
-          <div className="mb-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3">
-
-            <p className="text-sm text-emerald-300">
-              {successMessage}
-            </p>
-
-          </div>
-        )}
-
-        {/* STATUS */}
-        <section className="mb-8">
-
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 backdrop-blur-xl sm:p-6">
-
-            <div className="mb-4">
-
-              <p className="text-sm font-semibold text-white">
-                Problem status
-              </p>
-
-              <p className="mt-1 text-xs text-slate-500">
-                Track where you currently are with this problem.
-              </p>
-
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-3">
-
-              {/* ACTIVE */}
-              <button
-                type="button"
-                disabled={
-                  updatingStatus ||
-                  deletingProblem ||
-                  editingProblem ||
-                  regeneratingAI ||
-                  updatingAction
-                }
-                onClick={() =>
-                  handleStatusChange(
-                    "active"
-                  )
-                }
-                className={`rounded-2xl border px-4 py-3 text-left transition ${
-                  problem.status ===
-                  "active"
-                    ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
-                    : "border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-white"
-                } disabled:cursor-not-allowed disabled:opacity-60`}
-              >
-
-                <div className="flex items-center gap-2">
-
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      problem.status ===
-                      "active"
-                        ? "bg-amber-400"
-                        : "bg-slate-600"
-                    }`}
-                  />
-
-                  <span className="text-sm font-medium">
-                    Active
-                  </span>
-
-                </div>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  I haven't started yet
-                </p>
-
-              </button>
-
-              {/* IN PROGRESS */}
-              <button
-                type="button"
-                disabled={
-                  updatingStatus ||
-                  deletingProblem ||
-                  editingProblem ||
-                  regeneratingAI ||
-                  updatingAction
-                }
-                onClick={() =>
-                  handleStatusChange(
-                    "in_progress"
-                  )
-                }
-                className={`rounded-2xl border px-4 py-3 text-left transition ${
-                  problem.status ===
-                  "in_progress"
-                    ? "border-violet-400/30 bg-violet-400/10 text-violet-300"
-                    : "border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-white"
-                } disabled:cursor-not-allowed disabled:opacity-60`}
-              >
-
-                <div className="flex items-center gap-2">
-
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      problem.status ===
-                      "in_progress"
-                        ? "bg-violet-400"
-                        : "bg-slate-600"
-                    }`}
-                  />
-
-                  <span className="text-sm font-medium">
-                    In progress
-                  </span>
-
-                </div>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  I'm working on it
-                </p>
-
-              </button>
-
-              {/* RESOLVED */}
-              <button
-                type="button"
-                disabled={
-                  updatingStatus ||
-                  deletingProblem ||
-                  editingProblem ||
-                  regeneratingAI ||
-                  updatingAction
-                }
-                onClick={() =>
-                  handleStatusChange(
-                    "resolved"
-                  )
-                }
-                className={`rounded-2xl border px-4 py-3 text-left transition ${
-                  problem.status ===
-                  "resolved"
-                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                    : "border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-white"
-                } disabled:cursor-not-allowed disabled:opacity-60`}
-              >
-
-                <div className="flex items-center gap-2">
-
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      problem.status ===
-                      "resolved"
-                        ? "bg-emerald-400"
-                        : "bg-slate-600"
-                    }`}
-                  />
-
-                  <span className="text-sm font-medium">
-                    Resolved
-                  </span>
-
-                </div>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  Problem is solved
-                </p>
-
-              </button>
-
-            </div>
-
-            {updatingStatus && (
-              <p className="mt-3 text-xs text-slate-500">
-                Updating status...
-              </p>
-            )}
-
-            {error && (
-              <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3">
-
-                <p className="text-xs text-rose-300">
-                  {error}
-                </p>
-
-              </div>
-            )}
-
-          </div>
-
-        </section>
-
-        {/* USER PROBLEM */}
-        <section className="mb-8">
-
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl sm:p-8">
-
-            <div className="mb-5 flex items-center gap-3">
-
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06] text-slate-300">
-                ?
-              </div>
-
-              <div>
-
-                <p className="text-sm font-semibold text-white">
-                  Your problem
-                </p>
-
-                <p className="text-xs text-slate-500">
-                  What you told KLYRO
-                </p>
-
-              </div>
-
-            </div>
-
-            <p className="whitespace-pre-wrap text-sm leading-7 text-slate-300">
-              {problem.description}
-            </p>
-
-          </div>
-
-        </section>
-
-        {/* AI SECTION */}
-        <section className="mb-8">
-
-          <div className="rounded-3xl border border-violet-400/20 bg-violet-500/[0.05] p-5 shadow-2xl shadow-violet-950/10 backdrop-blur-xl sm:p-6">
-
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-
-              <div>
-
-                <div className="flex items-center gap-3">
-
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-lg text-violet-300">
-                    ✦
-                  </div>
-
-                  <div>
-
-                    <p className="text-sm font-semibold text-white">
-                      AI solution
-                    </p>
-
-                    <p className="mt-1 text-xs text-slate-500">
-                      Generate a fresh solution based on your current problem.
-                    </p>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-              <button
-                type="button"
-                disabled={
-                  regeneratingAI ||
-                  savingProblem ||
-                  deletingProblem ||
-                  editingProblem ||
-                  updatingStatus ||
-                  updatingAction
-                }
-                onClick={
-                  handleRegenerateAI
-                }
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-
-                {regeneratingAI ? (
-                  <>
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    Regenerating...
-                  </>
-                ) : (
-                  <>
-                    ✦ Regenerate AI
-                  </>
-                )}
-
-              </button>
-
-            </div>
-
-            {regeneratingAI && (
-              <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-
-                <p className="text-xs leading-5 text-slate-400">
-                  KLYRO is analyzing your problem again and creating a fresh action plan. This may take a few seconds.
-                </p>
-
-              </div>
-            )}
-
-          </div>
-
-        </section>
-
-        {/* AI SOLUTION */}
-        {problem.ai_solution && (
-          <section className="space-y-5">
-
-            {/* AI HEADER */}
-            <div className="overflow-hidden rounded-3xl border border-violet-400/20 bg-white/[0.04] shadow-2xl shadow-violet-950/20 backdrop-blur-xl">
-
-              <div className="border-b border-white/10 bg-violet-500/[0.06] px-5 py-5 sm:px-8">
-
-                <div className="flex items-center gap-3">
-
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-lg text-violet-300">
-                    ✦
-                  </div>
-
-                  <div>
-
-                    <p className="text-sm font-semibold text-white">
-                      KLYRO's solution
-                    </p>
-
-                    <p className="mt-1 text-xs text-slate-500">
-                      Your next move starts here.
-                    </p>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>
-
-            {/* KEY ISSUE */}
-            {problem.ai_solution.key_issue && (
-              <div className="rounded-3xl border border-violet-400/10 bg-violet-500/[0.04] p-6 backdrop-blur-xl sm:p-8">
-
-                <div className="mb-4 flex items-center gap-3">
-
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300">
-                    !
-                  </div>
-
-                  <h2 className="text-lg font-semibold text-white">
-                    Key issue
-                  </h2>
-
-                </div>
-
-                <p className="text-sm leading-7 text-slate-300">
-                  {problem.ai_solution.key_issue}
-                </p>
-
-              </div>
-            )}
-
-            {/* WHAT IS HAPPENING */}
-            {problem.ai_solution
-              .what_is_happening && (
-              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl sm:p-8">
-
-                <div className="mb-4 flex items-center gap-3">
-
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300">
-                    ?
-                  </div>
-
-                  <h2 className="text-lg font-semibold text-white">
-                    What's happening
-                  </h2>
-
-                </div>
-
-                <p className="text-sm leading-7 text-slate-300">
-                  {
-                    problem.ai_solution
-                      .what_is_happening
-                  }
-                </p>
-
-              </div>
-            )}
-
-            {/* WHY */}
-            {problem.ai_solution
-              .why_this_may_be_happening
-              ?.length > 0 && (
-              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl sm:p-8">
-
-                <div className="mb-5 flex items-center gap-3">
-
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300">
-                    🔍
-                  </div>
-
-                  <h2 className="text-lg font-semibold text-white">
-                    Why this may be happening
-                  </h2>
-
-                </div>
-
-                <div className="space-y-3">
-
-                  {problem.ai_solution
-                    .why_this_may_be_happening
-                    .map(
-                      (
-                        reason,
-                        index
-                      ) => (
-                        <div
-                          key={index}
-                          className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
-                        >
-
-                          <div className="flex gap-3">
-
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-xs font-medium text-violet-300">
-                              {index + 1}
-                            </span>
-
-                            <p className="text-sm leading-6 text-slate-300">
-                              {reason}
-                            </p>
-
-                          </div>
-
-                        </div>
-                      )
-                    )}
-
-                </div>
-
-              </div>
-            )}
-
-            {/* WHAT TO DO NEXT */}
-            {problem.ai_solution
-              .what_to_do_next
-              ?.length > 0 && (
-              <div className="rounded-3xl border border-emerald-400/10 bg-white/[0.04] p-6 backdrop-blur-xl sm:p-8">
-
-                <div className="mb-5 flex items-center gap-3">
-
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300">
-                    →
-                  </div>
-
-                  <h2 className="text-lg font-semibold text-white">
-                    What to do next
-                  </h2>
-
-                </div>
-
-                <div className="space-y-3">
-
-                  {problem.ai_solution
-                    .what_to_do_next
-                    .map(
-                      (
-                        action,
-                        index
-                      ) => (
-                        <div
-                          key={index}
-                          className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
-                        >
-
-                          <span className="text-emerald-400">
-                            ✓
-                          </span>
-
-                          <p className="text-sm leading-6 text-slate-300">
-                            {action}
-                          </p>
-
-                        </div>
-                      )
-                    )}
-
-                </div>
-
-              </div>
-            )}
-
-            {/* ACTION CHECKLIST */}
-            {actions.length > 0 && (
-              <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl sm:p-8">
-
-                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-
-                  <div>
-
-                    <div className="flex items-center gap-3">
-
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300">
-                        ✓
-                      </div>
-
-                      <div>
-
-                        <h2 className="text-lg font-semibold text-white">
-                          Your action plan
-                        </h2>
-
-                        <p className="mt-1 text-xs text-slate-500">
-                          Complete these steps to move the problem forward.
-                        </p>
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                  <div className="text-left sm:text-right">
-
-                    <p className="text-2xl font-semibold text-white">
-                      {completedActions}/
-                      {actions.length}
-                    </p>
-
-                    <p className="text-xs text-slate-500">
-                      completed
-                    </p>
-
-                  </div>
-
-                </div>
-
-                {/* PROGRESS */}
-                <div className="mb-6">
-
-                  <div className="mb-2 flex items-center justify-between text-xs">
-
-                    <span className="text-slate-500">
-                      Progress
-                    </span>
-
-                    <span className="font-medium text-violet-300">
-                      {actionProgress}%
-                    </span>
-
-                  </div>
-
-                  <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
-
-                    <div
-                      className="h-full rounded-full bg-violet-500 transition-all duration-500"
-                      style={{
-                        width: `${actionProgress}%`,
-                      }}
-                    />
-
-                  </div>
-
-                </div>
-
-                {/* ACTIONS */}
-                <div className="space-y-3">
-
-                  {actions.map(
-                    (action) => (
-                      <button
-                        key={action.id}
-                        type="button"
-                        disabled={
-                          updatingAction !==
-                            null &&
-                          updatingAction !==
-                            action.id
-                        }
-                        onClick={() =>
-                          handleToggleAction(
-                            action.id
-                          )
-                        }
-                        className={`flex w-full items-start gap-4 rounded-2xl border p-4 text-left transition ${
-                          action.completed
-                            ? "border-emerald-400/20 bg-emerald-400/[0.06]"
-                            : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
-                        } disabled:cursor-not-allowed disabled:opacity-60`}
-                      >
-
-                        <span
-                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${
-                            action.completed
-                              ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                              : "border-white/10 bg-white/[0.04] text-slate-500"
-                          }`}
-                        >
-                          {updatingAction ===
-                          action.id ? (
-                            <span className="h-3 w-3 animate-spin rounded-full border border-white/20 border-t-violet-400" />
-                          ) : action.completed ? (
-                            "✓"
-                          ) : (
-                            action.step_number
-                          )}
-                        </span>
-
-                        <div className="min-w-0 flex-1">
-
-                          <h3
-                            className={`text-sm font-semibold ${
-                              action.completed
-                                ? "text-emerald-300 line-through"
-                                : "text-white"
-                            }`}
-                          >
-                            {action.title}
-                          </h3>
-
-                          <p
-                            className={`mt-1 text-sm leading-6 ${
-                              action.completed
-                                ? "text-slate-500"
-                                : "text-slate-400"
-                            }`}
-                          >
-                            {
-                              action.description
-                            }
-                          </p>
-
-                        </div>
-
-                      </button>
-                    )
-                  )}
-
-                </div>
-
-                {actionProgress ===
-                  100 && (
-                  <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3">
-
-                    <p className="text-sm font-medium text-emerald-300">
-                      All actions completed. Nice work.
-                    </p>
-
-                    <p className="mt-1 text-xs text-emerald-300/60">
-                      If the problem is solved, you can mark it as resolved above.
-                    </p>
-
-                  </div>
-                )}
-
-              </section>
-            )}
-
-            {/* WHAT TO AVOID */}
-            {problem.ai_solution
-              .what_to_avoid
-              ?.length > 0 && (
-              <div className="rounded-3xl border border-rose-400/10 bg-white/[0.04] p-6 backdrop-blur-xl sm:p-8">
-
-                <div className="mb-5 flex items-center gap-3">
-
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-400/10 text-rose-300">
-                    ×
-                  </div>
-
-                  <h2 className="text-lg font-semibold text-white">
-                    What to avoid
-                  </h2>
-
-                </div>
-
-                <div className="space-y-3">
-
-                  {problem.ai_solution
-                    .what_to_avoid
-                    .map(
-                      (
-                        item,
-                        index
-                      ) => (
-                        <div
-                          key={index}
-                          className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
-                        >
-
-                          <span className="text-rose-400">
-                            ×
-                          </span>
-
-                          <p className="text-sm leading-6 text-slate-300">
-                            {item}
-                          </p>
-
-                        </div>
-                      )
-                    )}
-
-                </div>
-
-              </div>
-            )}
-
-            {/* SUMMARY */}
-            {problem.ai_solution
-              .summary && (
-              <div className="rounded-3xl border border-violet-400/20 bg-violet-500/[0.05] p-6 shadow-2xl shadow-violet-950/10 sm:p-8">
-
-                <div className="mb-4 flex items-center gap-3">
-
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/20 text-violet-300">
-                    ✦
-                  </div>
-
-                  <h2 className="text-lg font-semibold text-white">
-                    Summary
-                  </h2>
-
-                </div>
-
-                <p className="text-sm leading-7 text-slate-300">
-                  {
-                    problem.ai_solution
-                      .summary
-                  }
-                </p>
-
-              </div>
-            )}
-
-          </section>
-        )}
-
-        {/* OLD AI RESPONSE FALLBACK */}
-        {!problem.ai_solution &&
-          problem.ai_response && (
-            <section>
-
-              <div className="overflow-hidden rounded-3xl border border-violet-400/20 bg-white/[0.04] shadow-2xl shadow-violet-950/20 backdrop-blur-xl">
-
-                <div className="border-b border-white/10 bg-violet-500/[0.06] px-5 py-5 sm:px-8">
-
-                  <div className="flex items-center gap-3">
-
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-lg text-violet-300">
+            <div className="space-y-8 p-6 sm:p-8">
+              {solution?.summary && (
+                <section>
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300">
                       ✦
                     </div>
 
                     <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-violet-300">
+                        Quick answer
+                      </p>
 
-                      <p className="text-sm font-semibold text-white">
-                        KLYRO's solution
+                      <h3 className="mt-1 text-lg font-semibold text-white">
+                        In short
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-violet-400/10 bg-violet-500/[0.04] p-5">
+                    <p className="text-sm leading-7 text-slate-300">
+                      {solution.summary}
+                    </p>
+                  </div>
+                </section>
+              )}
+
+              {solution?.what_is_happening && (
+                <section>
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      01
+                    </p>
+
+                    <h3 className="mt-1 text-xl font-semibold text-white">
+                      What is happening?
+                    </h3>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/[0.06] bg-black/10 p-5">
+                    <p className="text-sm leading-7 text-slate-300">
+                      {solution.what_is_happening}
+                    </p>
+                  </div>
+                </section>
+              )}
+
+              {Array.isArray(
+                solution?.why_this_may_be_happening
+              ) &&
+                solution.why_this_may_be_happening
+                  .length > 0 && (
+                  <section>
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        02
+                      </p>
+
+                      <h3 className="mt-1 text-xl font-semibold text-white">
+                        Why this may be happening
+                      </h3>
+                    </div>
+
+                    <div className="space-y-3">
+                      {solution.why_this_may_be_happening.map(
+                        (item, index) => (
+                          <div
+                            key={index}
+                            className="flex gap-3 rounded-2xl border border-white/[0.06] bg-black/10 p-4"
+                          >
+                            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-xs text-slate-400">
+                              {index + 1}
+                            </span>
+
+                            <p className="text-sm leading-7 text-slate-300">
+                              {item}
+                            </p>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </section>
+                )}
+
+              {Array.isArray(
+                solution?.what_to_do_next
+              ) &&
+                solution.what_to_do_next.length > 0 && (
+                  <section>
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        03
+                      </p>
+
+                      <h3 className="mt-1 text-xl font-semibold text-white">
+                        What to do next
+                      </h3>
+                    </div>
+
+                    <div className="space-y-3">
+                      {solution.what_to_do_next.map(
+                        (item, index) => (
+                          <div
+                            key={index}
+                            className="flex gap-3 rounded-2xl border border-white/[0.06] bg-black/10 p-4"
+                          >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-xs text-violet-300">
+                              {index + 1}
+                            </span>
+
+                            <p className="text-sm leading-7 text-slate-300">
+                              {item}
+                            </p>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </section>
+                )}
+
+              {actions.length > 0 && (
+                <section>
+                  <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Action plan
+                      </p>
+
+                      <h3 className="mt-1 text-xl font-semibold text-white">
+                        Your next moves
+                      </h3>
+                    </div>
+
+                    <div className="sm:text-right">
+                      <p className="text-sm font-medium text-white">
+                        {completedActions} /{" "}
+                        {actions.length} completed
                       </p>
 
                       <p className="mt-1 text-xs text-slate-500">
-                        Your next move starts here.
+                        {progress}% complete
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mb-6 h-2 overflow-hidden rounded-full bg-white/[0.06]">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-all duration-500"
+                      style={{
+                        width: `${progress}%`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    {actions.map(
+                      (action, index) => (
+                        <button
+                          key={
+                            action.id ||
+                            `${action.step_number}-${index}`
+                          }
+                          onClick={() =>
+                            toggleAction(action)
+                          }
+                          disabled={String(
+                            action.id
+                          ).startsWith(
+                            "temporary-"
+                          )}
+                          className={`group flex w-full items-start gap-4 rounded-2xl border p-4 text-left transition ${
+                            action.completed
+                              ? "border-emerald-400/10 bg-emerald-400/[0.04]"
+                              : "border-white/[0.06] bg-black/10 hover:bg-white/[0.04]"
+                          }`}
+                        >
+                          <div
+                            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border text-xs font-medium transition ${
+                              action.completed
+                                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
+                                : "border-white/10 bg-white/[0.03] text-slate-500 group-hover:border-violet-400/20 group-hover:text-violet-300"
+                            }`}
+                          >
+                            {action.completed
+                              ? "✓"
+                              : action.step_number ||
+                                index + 1}
+                          </div>
+
+                          <div className="min-w-0">
+                            <h4
+                              className={`text-sm font-semibold ${
+                                action.completed
+                                  ? "text-emerald-200"
+                                  : "text-white"
+                              }`}
+                            >
+                              {action.title ||
+                                `Step ${
+                                  index + 1
+                                }`}
+                            </h4>
+
+                            {action.description && (
+                              <p
+                                className={`mt-1 text-sm leading-6 ${
+                                  action.completed
+                                    ? "text-slate-500"
+                                    : "text-slate-400"
+                                }`}
+                              >
+                                {
+                                  action.description
+                                }
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {Array.isArray(
+                solution?.what_to_avoid
+              ) &&
+                solution.what_to_avoid.length > 0 && (
+                  <section>
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        04
                       </p>
 
+                      <h3 className="mt-1 text-xl font-semibold text-white">
+                        What to avoid
+                      </h3>
                     </div>
 
-                  </div>
+                    <div className="space-y-3">
+                      {solution.what_to_avoid.map(
+                        (item, index) => (
+                          <div
+                            key={index}
+                            className="flex gap-3 rounded-2xl border border-rose-400/[0.08] bg-rose-500/[0.03] p-4"
+                          >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-xs text-rose-300">
+                              !
+                            </span>
 
+                            <p className="text-sm leading-7 text-slate-400">
+                              {item}
+                            </p>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </section>
+                )}
+
+              {!solution &&
+                problem.ai_response && (
+                  <section>
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        KLYRO response
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/[0.06] bg-black/10 p-5">
+                      <p className="whitespace-pre-wrap text-sm leading-7 text-slate-300">
+                        {typeof problem.ai_response ===
+                        "string"
+                          ? problem.ai_response
+                          : JSON.stringify(
+                              problem.ai_response,
+                              null,
+                              2
+                            )}
+                      </p>
+                    </div>
+                  </section>
+                )}
+
+              {!solution &&
+                !problem.ai_response && (
+                  <section className="rounded-2xl border border-amber-400/10 bg-amber-500/[0.03] p-6">
+                    <p className="text-sm text-amber-200">
+                      KLYRO hasn't generated a detailed
+                      solution for this problem yet.
+                    </p>
+
+                    <button
+                      onClick={regenerateSolution}
+                      disabled={regenerating}
+                      className="mt-4 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
+                    >
+                      {regenerating
+                        ? "Thinking..."
+                        : "Generate solution"}
+                    </button>
+                  </section>
+                )}
+            </div>
+
+            <div className="border-t border-white/[0.06] p-6 sm:p-8">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-white">
+                    Keep moving.
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    You can always come back to this problem.
+                  </p>
                 </div>
 
-                <div className="px-5 py-7 sm:px-8 sm:py-8">
+                <div className="flex flex-wrap gap-2">
+                  {problem.status !== "resolved" && (
+                    <button
+                      onClick={() =>
+                        updateStatus("resolved")
+                      }
+                      disabled={updating}
+                      className="rounded-xl border border-emerald-400/10 bg-emerald-400/5 px-4 py-2.5 text-sm text-emerald-300 transition hover:bg-emerald-400/10 disabled:opacity-50"
+                    >
+                      Mark resolved
+                    </button>
+                  )}
 
-                  <div className="whitespace-pre-wrap text-sm leading-7 text-slate-300">
-                    {problem.ai_response}
-                  </div>
+                  {problem.status === "resolved" && (
+                    <button
+                      onClick={() =>
+                        updateStatus("active")
+                      }
+                      disabled={updating}
+                      className="rounded-xl border border-violet-400/10 bg-violet-400/5 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/10 disabled:opacity-50"
+                    >
+                      Reopen
+                    </button>
+                  )}
 
+                  <button
+                    onClick={regenerateSolution}
+                    disabled={regenerating}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-slate-300 transition hover:bg-white/[0.06] disabled:opacity-50"
+                  >
+                    {regenerating
+                      ? "Regenerating..."
+                      : "Regenerate AI"}
+                  </button>
+
+                  <button
+                    onClick={deleteProblem}
+                    disabled={updating}
+                    className="rounded-xl border border-rose-400/10 bg-rose-400/5 px-4 py-2.5 text-sm text-rose-300 transition hover:bg-rose-400/10 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
                 </div>
-
               </div>
+            </div>
+          </section>
 
-            </section>
-          )}
+          <div className="mt-8 flex flex-col items-center justify-between gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 sm:flex-row">
+            <div>
+              <p className="text-sm font-medium text-white">
+                Need help with something else?
+              </p>
 
-        {/* NO AI SOLUTION */}
-        {!problem.ai_solution &&
-          !problem.ai_response && (
-            <section>
+              <p className="mt-1 text-xs text-slate-500">
+                Ask KLYRO another question whenever you’re
+                ready.
+              </p>
+            </div>
 
-              <div className="rounded-3xl border border-amber-400/20 bg-amber-400/[0.05] p-6">
-
-                <p className="text-sm font-medium text-amber-300">
-                  KLYRO is ready to generate a fresh solution.
-                </p>
-
-                <p className="mt-2 text-xs leading-5 text-slate-500">
-                  Click "Regenerate AI" above to analyze this problem.
-                </p>
-
-              </div>
-
-            </section>
-          )}
-
+            <button
+              onClick={() => navigate("/")}
+              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-slate-200"
+            >
+              Ask KLYRO ✦
+            </button>
+          </div>
+        </div>
       </main>
     </div>
   )
